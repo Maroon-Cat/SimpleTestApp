@@ -7,13 +7,22 @@ app = Flask(__name__)
 def get_region_and_az():
     """
     REST API endpoint to return the AWS region and availability zone (AZ)
-    the instance is running in. Utilizes AWS metadata.
+    the instance is running in. Supports IMDSv2 (tokens required).
     """
     metadata_url = "http://169.254.169.254/latest/meta-data/"
     try:
-        # Fetch the region and availability zone (AZ) from instance metadata
-        az = requests.get(metadata_url + "placement/availability-zone").text
-        region = az[:-1]  # Region is the AZ without the last character
+        token = requests.put(
+            metadata_url + "api/token",
+            headers={"X-aws-ec2-metadata-token-ttl-seconds": "21600"}
+        ).text
+
+        az = requests.get(
+            metadata_url + "placement/availability-zone",
+            headers={"X-aws-ec2-metadata-token": token}
+        ).text  # e.g., "eu-central-1a"
+
+        region = az[:-1]  # Strip the last character (AZ letter) to get the region
+
         return {"region": region, "az": az}, 200
     except requests.exceptions.RequestException as e:
         return {"error": str(e)}, 500
