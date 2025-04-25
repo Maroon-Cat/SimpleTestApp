@@ -15,12 +15,12 @@ def get_region_and_az():
             metadata_url + "api/token",
             headers={"X-aws-ec2-metadata-token-ttl-seconds": "21600"}
         ).text
-
+        print(token)
         az = requests.get(
             metadata_url + "placement/availability-zone",
             headers={"X-aws-ec2-metadata-token": token}
         ).text  # e.g., "eu-central-1a"
-
+        print(az)
         region = az[:-1]  # Strip the last character (AZ letter) to get the region
 
         return {"region": region, "az": az}, 200
