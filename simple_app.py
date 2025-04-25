@@ -15,32 +15,36 @@ logging.basicConfig(
     ]
 )
 
+def fetch_metadata(path):
+    try:
+        # Get IMDSv2 token first
+        token = subprocess.check_output(
+            ['curl', '-sX', 'PUT', '-H', 'X-aws-ec2-metadata-token-ttl-seconds: 21600',
+             'http://169.254.169.254/latest/api/token'], text=True
+        ).strip()
+
+        # Use the token to fetch metadata
+        value = subprocess.check_output(
+            ['curl', '-sH', f'X-aws-ec2-metadata-token: {token}',
+             f'http://169.254.169.254/latest/meta-data/{path}'],
+            text=True
+        ).strip()
+
+        return value
+    except subprocess.CalledProcessError:
+        logging.error(f"Failed to fetch metadata for {path}", exc_info=True)
+        return ""
+
 # Define the route `/region` to return region and AZ information.
 @app.route('/region', methods=['GET'])
 def region_info():
-    """
-    Fetches the AWS region and availability zone information
-    using the EC2 instance metadata service.
-    """
+    az = fetch_metadata('placement/availability-zone')
+    region = az[:-1] if az else ""
+    logging.info(f"Region: {region}, Availability Zone: {az}")
 
-    try:
-        # Call AWS metadata endpoint to get region and availability zone.
-        # Fetch the availability zone first.
-        az_command = ['curl', '-s', 'http://169.254.169.254/latest/meta-data/placement/availability-zone']
-        az = subprocess.check_output(az_command, text=True).strip()
-
-        # Derive the region by slicing the last character from the AZ.
-        region = az[:-1]
-
-        # Log the region/az being returned.
-        logging.info(f"Region: {region}, Availability Zone: {az}")
-
-        # Return the values as a JSON response.
+    if az:
         return jsonify({"region": region, "availability_zone": az}), 200
-
-    except subprocess.CalledProcessError as e:
-        # If there is an issue with the `curl` command, log it and return an error.
-        logging.error("Failed to fetch region/AZ", exc_info=True)
+    else:
         return jsonify({"error": "Failed to fetch region/AZ"}), 500
 
 
