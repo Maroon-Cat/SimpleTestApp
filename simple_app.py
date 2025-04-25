@@ -22,7 +22,7 @@ def get_region_and_az():
         logging.debug("Requesting IMDSv2 token...")
         token_response = requests.put(
             metadata_url + "api/token",
-            headers={"X-aws-ec2-metadata-token-ttl-seconds": "21600"}
+            headers={"X-aws-ec2-metadata-token-ttl-seconds": "360"}
         )
 
         if token_response.status_code != 200:
