@@ -5,7 +5,7 @@ def create_artifact():
     """
     Package the application into a deployable ZIP file.
     """
-    artifact_name = "web_app.zip"
+    artifact_name = "../artifacts/web_app.zip"
     with zipfile.ZipFile(artifact_name, "w") as zipf:
         for root, _, files in os.walk("."):
             # Add only .py files to the artifact
