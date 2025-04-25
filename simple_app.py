@@ -1,55 +1,50 @@
 import logging
-from flask import Flask
-import boto3
-from botocore.exceptions import NoCredentialsError, EndpointConnectionError
+import subprocess
+from flask import Flask, jsonify
 
-# Configure logging
-logging.basicConfig(
-    level=logging.DEBUG,  # Change to logging.INFO for less verbose output
-    format="%(asctime)s [%(levelname)s] %(message)s",
-)
-
+# Create a Flask application
 app = Flask(__name__)
 
+# Set up logging. Log to both a file and the console.
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("app.log"),  # Logs to a file named "app.log".
+        logging.StreamHandler()         # Outputs logs to console for debugging.
+    ]
+)
 
-@app.route("/region", methods=["GET"])
-def get_region_and_az():
+# Define the route `/region` to return region and AZ information.
+@app.route('/region', methods=['GET'])
+def region_info():
     """
-    REST API endpoint to return the AWS region and availability zone (AZ)
-    the instance is running in. Uses Boto3 to access EC2 metadata.
+    Fetches the AWS region and availability zone information
+    using the EC2 instance metadata service.
     """
+
     try:
-        # Log the initialization of EC2 client
-        logging.debug("Initializing EC2 Boto3 client...")
+        # Call AWS metadata endpoint to get region and availability zone.
+        # Fetch the availability zone first.
+        az_command = ['curl', '-s', 'http://169.254.169.254/latest/meta-data/placement/availability-zone']
+        az = subprocess.check_output(az_command, text=True).strip()
 
-        # Use Boto3 to initialize the EC2 metadata client
-        session = boto3.session.Session()
-        ec2_metadata = session.client("ec2-metadata")
+        # Derive the region by slicing the last character from the AZ.
+        region = az[:-1]
 
-        # Fetch the availability zone
-        logging.debug("Fetching availability zone using Boto3...")
-        az = ec2_metadata.placement["availabilityZone"]
+        # Log the region/az being returned.
+        logging.info(f"Region: {region}, Availability Zone: {az}")
 
-        # Derive the region from the availability zone
-        region = az[:-1]  # Strip off the last character (AZ letter)
-        logging.debug(f"Region derived from AZ: {region}")
+        # Return the values as a JSON response.
+        return jsonify({"region": region, "availability_zone": az}), 200
 
-        return {"region": region, "az": az}, 200
-
-    except NoCredentialsError as e:
-        logging.error("No AWS credentials found. Are you running on an EC2 instance with IAM role access?")
-        return {"error": "No AWS credentials found"}, 500
-
-    except EndpointConnectionError as e:
-        logging.error("Unable to connect to EC2 metadata service. Is this running on an AWS EC2 instance?")
-        return {"error": "Failed to connect to EC2 metadata service"}, 500
-
-    except Exception as e:
-        logging.error(f"An error occurred: {e}")
-        return {"error": str(e)}, 500
+    except subprocess.CalledProcessError as e:
+        # If there is an issue with the `curl` command, log it and return an error.
+        logging.error("Failed to fetch region/AZ", exc_info=True)
+        return jsonify({"error": "Failed to fetch region/AZ"}), 500
 
 
 if __name__ == "__main__":
-    # Configure Flask's built-in server to serve on 0.0.0.0:5000
-    logging.info("Starting Flask app...")
+    # Run the Flask server on all interfaces (0.0.0.0) and port 8080.
+    # This is important because AWS Elastic Load Balancer interacts via public IPs.
     app.run(host="0.0.0.0", port=5000)
